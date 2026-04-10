@@ -12,13 +12,14 @@ class LLMClient:
     LLMClient: A wrapper around the Google Gemini API.
     """
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        self.api_url = os.getenv("GEMINI_API_URL")
+        self.api_key = os.getenv("GEMINI_API_KEY", "placeholder-api-key")
+        self.api_url = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent")
         self.http_proxy = os.getenv("HTTP_PROXY")
         self.https_proxy = os.getenv("HTTPS_PROXY")
         
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
+        # 允许在开发环境中使用占位符 API 密钥
+        if self.api_key == "placeholder-api-key":
+            print("[LLM] Using placeholder API key. In production, please set GEMINI_API_KEY environment variable.")
             
     async def generate(self, messages: list, temperature: float = 0.7, max_tokens: int = 1000) -> str:
         """

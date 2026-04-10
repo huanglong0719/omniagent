@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from omniagent.app.gateway.adapters.base import ChannelAdapter
+from app.gateway.adapters.base import ChannelAdapter
 from twilio.rest import Client
 import asyncio
 

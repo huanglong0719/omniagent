@@ -7,6 +7,8 @@ from collections import deque
 from datetime import datetime, timedelta
 from app.core.models import OmniMessage, MemoryTier, Session
 from app.security.encryption import get_encryption_util
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, PointStruct
 
 class OmniMemoryManager:
     """
@@ -17,7 +19,7 @@ class OmniMemoryManager:
     L3: Persistent SQL storage (SQLite)
     """
     
-    def __init__(self, db_path: str = "omniagent.db"):
+    def __init__(self, db_path: str = "omniagent.db", vector_db_url: str = "http://localhost:6333"):
         self.db_path = db_path
         self._init_db()
         self.encryption_util = get_encryption_util()
@@ -26,9 +28,25 @@ class OmniMemoryManager:
         self._l1_cache: Dict[str, List[OmniMessage]] = {}
         self.L1_MAX_SIZE = 20
         
-        # L2 Local Vector Index (Mocking a Vector DB)
-        # Format: {message_id: (embedding, OmniMessage)}
+        # L2 Vector Storage
+        self.vector_db_url = vector_db_url
+        self._use_qdrant = False
+        self._qdrant_client = None
+        self._collection_name = "omniagent_messages"
+        
+        # Fallback to local vector index
         self._l2_index: Dict[str, Tuple[List[float], OmniMessage]] = {}
+        
+        # Try to initialize Qdrant
+        try:
+            self._qdrant_client = QdrantClient(url=self.vector_db_url)
+            self._init_vector_db()
+            self._use_qdrant = True
+            print("[Memory] Qdrant vector database initialized successfully")
+        except Exception as e:
+            print(f"[Memory] Qdrant initialization failed: {e}")
+            print("[Memory] Falling back to local vector index")
+            self._use_qdrant = False
         
         # Access frequency tracking: {message_id: access_count}
         self._access_frequency: Dict[str, int] = {}
@@ -49,6 +67,17 @@ class OmniMemoryManager:
         self._batch_size = 50  # 增加批处理大小
         self._batch_interval = 0.5  # 增加批处理间隔
         self._last_batch_time = time.time()
+        
+        # Database connection pool (simple implementation)
+        self._db_conn = None
+        
+        # Memory cleanup timer
+        self._cleanup_interval = 3600  # 1 hour
+        self._last_cleanup = time.time()
+        
+        # Session timeout
+        self._session_timeout = 3600  # 1 hour
+        self._session_last_access = {}
         
 
 
@@ -81,10 +110,26 @@ class OmniMemoryManager:
             ''')
             conn.commit()
 
+    def _init_vector_db(self):
+        """Initialize Qdrant vector database."""
+        # Check if collection exists
+        collections = self._qdrant_client.get_collections()
+        collection_names = [col.name for col in collections.collections]
+        
+        if self._collection_name not in collection_names:
+            # Create collection with 768-dimensional vectors (BERT embeddings)
+            self._qdrant_client.create_collection(
+                collection_name=self._collection_name,
+                vectors_config=VectorParams(size=768, distance="Cosine")
+            )
+
     async def add_message(self, message: OmniMessage, session: Session):
         """
         Adds a message to the memory system with batch processing.
         """
+        # Update session access time and trigger cleanup
+        await self.update_session_access(session.session_id)
+        
         # 1. Add to L1 (Active Context)
         await self._add_to_l1(session.session_id, message)
         
@@ -203,10 +248,50 @@ class OmniMemoryManager:
         # Mock embedding generation (In real system, use OpenAI/HuggingFace embeddings)
         # We'll use a simple hash-based mock embedding for the prototype
         embedding = [float(hash(word) % 100 / 100.0) for word in message.content.split()]
-        self._l2_index[message.message_id] = (embedding, message)
+        
+        if self._use_qdrant:
+            # Pad embedding to 768 dimensions to match Qdrant collection
+            while len(embedding) < 768:
+                embedding.append(0.0)
+            if len(embedding) > 768:
+                embedding = embedding[:768]
+            
+            # Store in Qdrant
+            point = PointStruct(
+                id=message.message_id,
+                vector=embedding,
+                payload={
+                    "session_id": message.session_id,
+                    "sender": message.sender,
+                    "content": message.content,
+                    "timestamp": message.timestamp.isoformat() if message.timestamp else datetime.now().isoformat(),
+                    "channel": message.channel
+                }
+            )
+            
+            # Upsert point to Qdrant
+            try:
+                self._qdrant_client.upsert(
+                    collection_name=self._collection_name,
+                    points=[point]
+                )
+            except Exception as e:
+                print(f"[Memory] Qdrant upsert failed: {e}")
+                print("[Memory] Falling back to local vector index")
+                self._l2_index[message.message_id] = (embedding, message)
+        else:
+            # Use local vector index as fallback
+            self._l2_index[message.message_id] = (embedding, message)
+            # Limit L2 size
+            if len(self._l2_index) > 1000:
+                # Remove oldest message
+                oldest_id = next(iter(self._l2_index))
+                del self._l2_index[oldest_id]
 
     async def get_context(self, session_id: str) -> List[OmniMessage]:
         """Retrieves the current L1 context."""
+        # Update session access time and trigger cleanup
+        await self.update_session_access(session_id)
         return self._l1_cache.get(session_id, [])
 
     async def page_in(self, session_id: str, query: str, limit: int = 5):
@@ -214,6 +299,9 @@ class OmniMemoryManager:
         Paging In: Retrieves relevant memories from L2 and promotes them to L1.
         Implements smart paging with priority-based selection.
         """
+        # Update session access time and trigger cleanup
+        await self.update_session_access(session_id)
+        
         print(f"[Paging] Paging IN relevant memories for query: {query}")
         
         # Get relevant memories
@@ -249,13 +337,59 @@ class OmniMemoryManager:
 
     async def semantic_search(self, query: str, session_id: str, limit: int = 5) -> List[OmniMessage]:
         """
-        L2 Semantic Search using cosine similarity (Mocked).
+        L2 Semantic Search using Qdrant vector database or local fallback.
         """
         print(f"[L2 Search] Searching for: {query}")
         
-        # Mock embedding for query
+        # Generate query embedding
         query_emb = [float(hash(word) % 100 / 100.0) for word in query.split()]
         
+        if self._use_qdrant:
+            # Pad embedding to 768 dimensions
+            while len(query_emb) < 768:
+                query_emb.append(0.0)
+            if len(query_emb) > 768:
+                query_emb = query_emb[:768]
+            
+            # Search in Qdrant
+            try:
+                search_result = self._qdrant_client.search(
+                    collection_name=self._collection_name,
+                    query_vector=query_emb,
+                    limit=limit,
+                    filter={
+                        "must": [
+                            {
+                                "key": "session_id",
+                                "match": {
+                                    "value": session_id
+                                }
+                            }
+                        ]
+                    }
+                )
+                
+                # Convert search results to OmniMessage objects
+                results = []
+                for hit in search_result:
+                    payload = hit.payload
+                    message = OmniMessage(
+                        message_id=hit.id,
+                        session_id=payload.get("session_id"),
+                        sender=payload.get("sender"),
+                        content=payload.get("content"),
+                        timestamp=datetime.fromisoformat(payload.get("timestamp")),
+                        channel=payload.get("channel")
+                    )
+                    results.append(message)
+                
+                return results
+            except Exception as e:
+                print(f"[Memory] Qdrant search failed: {e}")
+                print("[Memory] Falling back to local vector index")
+                # Fall through to local vector index
+        
+        # Use local vector index as fallback
         # Simple cosine similarity mock
         results = []
         for mid, (emb, msg) in self._l2_index.items():
@@ -341,3 +475,59 @@ class OmniMemoryManager:
                     tier=MemoryTier(row[6])
                 )
             return None
+    
+    async def cleanup_memory(self):
+        """Cleanup memory by removing inactive sessions and old data."""
+        current_time = time.time()
+        
+        # Check if cleanup is needed
+        if current_time - self._last_cleanup < self._cleanup_interval:
+            return
+        
+        print("[Memory] Performing memory cleanup...")
+        
+        # Remove inactive sessions
+        inactive_sessions = []
+        for session_id, last_access in self._session_last_access.items():
+            if current_time - last_access > self._session_timeout:
+                inactive_sessions.append(session_id)
+        
+        for session_id in inactive_sessions:
+            if session_id in self._l1_cache:
+                del self._l1_cache[session_id]
+            if session_id in self._recently_used:
+                del self._recently_used[session_id]
+            if session_id in self._session_topics:
+                del self._session_topics[session_id]
+            if session_id in self._session_last_access:
+                del self._session_last_access[session_id]
+        
+        # Limit L2 index size
+        if len(self._l2_index) > 5000:
+            # Keep most recent 5000 entries
+            recent_keys = list(self._l2_index.keys())[-5000:]
+            self._l2_index = {key: self._l2_index[key] for key in recent_keys}
+        
+        # Limit access frequency tracking
+        if len(self._access_frequency) > 10000:
+            # Keep top 10000 most accessed
+            sorted_freq = sorted(self._access_frequency.items(), key=lambda x: x[1], reverse=True)[:10000]
+            self._access_frequency = dict(sorted_freq)
+        
+        # Limit topic frequency tracking
+        if len(self._topic_frequency) > 1000:
+            # Keep top 1000 most frequent topics
+            sorted_topics = sorted(self._topic_frequency.items(), key=lambda x: x[1], reverse=True)[:1000]
+            self._topic_frequency = dict(sorted_topics)
+        
+        # Close database connection if idle
+        self._close_db_conn()
+        
+        self._last_cleanup = current_time
+        print(f"[Memory] Cleanup completed. Removed {len(inactive_sessions)} inactive sessions.")
+    
+    async def update_session_access(self, session_id: str):
+        """Update session last access time."""
+        self._session_last_access[session_id] = time.time()
+        # Trigger cleanup if needed
+        await self.cleanup_memory()

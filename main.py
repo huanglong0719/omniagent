@@ -1,15 +1,29 @@
 import uvicorn
 import asyncio
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from omniagent.app.security.privacy_filter import PrivacyFilter
-from omniagent.app.core.models import OmniMessage, Session
-from omniagent.app.memory.manager import OmniMemoryManager
-from omniagent.app.brain.brain import OmniBrain
-from omniagent.app.gateway.gateway import OmniGateway
-from omniagent.app.gateway.adapters import TelegramAdapter, WhatsAppAdapter
+from app.security.privacy_filter import PrivacyFilter
+from app.core.models import OmniMessage, Session
+from app.memory.manager import OmniMemoryManager
+from app.brain.brain import OmniBrain
+from app.gateway.gateway import OmniGateway
+from app.gateway.adapters import TelegramAdapter, WhatsAppAdapter
+from app.api.endpoints import app as api_app
 
 app = FastAPI(title="OmniAgent API")
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 在生产环境中应该设置具体的域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 包含 API 路由
+app.mount("/api", api_app)
 
 # Initialize Components
 memory_manager = OmniMemoryManager()
@@ -78,4 +92,4 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8002)

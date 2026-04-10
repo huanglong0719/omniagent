@@ -4,6 +4,8 @@ from datetime import datetime
 from app.core.models import OmniMessage
 from app.memory.manager import OmniMemoryManager
 from app.evolution.verification import SkillVerificationSystem
+from app.evolution.generator import SkillGenerator
+from app.evolution.marketplace import SkillMarketplace
 
 class EvolutionEngine:
     """
@@ -17,6 +19,8 @@ class EvolutionEngine:
         if not os.path.exists(self.skills_dir):
             os.makedirs(self.skills_dir)
         self.verification_system = SkillVerificationSystem(skills_dir)
+        self.skill_generator = SkillGenerator()
+        self.skill_marketplace = SkillMarketplace(skills_dir)
 
 
     def get_best_skill(self, query: str) -> Optional[str]:
@@ -46,35 +50,39 @@ class EvolutionEngine:
         
         return None
 
-    async def create_skill(self, task_name: str, experience_trace: str, success_criteria: str):
+    async def create_skill(self, task_name: str, experience_trace: str, success_criteria: str, category: str = "general_task"):
         """
-        Creates a new Markdown skill from a successful experience trace.
+        Creates a new Markdown skill from a successful experience trace using the skill generator.
         """
-        skill_name = f"skill_{task_name.replace(' ', '_').lower()}.md"
-        file_path = os.path.join(self.skills_dir, skill_name)
+        # Generate skill using generator
+        skill_content = self.skill_generator.generate_skill(
+            skill_name=task_name,
+            skill_description="This skill was evolved from a successful experience.",
+            category=category,
+            execution_steps=[
+                {"title": "执行任务", "description": experience_trace}
+            ],
+            success_criteria=[success_criteria]
+        )
         
-        skill_content = f"""# Skill: {task_name}
-## Description
-This skill was evolved from a successful experience.
-
-## Execution Steps
-{experience_trace}
-
-## Success Criteria
-{success_criteria}
-
-## Metadata
-- Created at: {datetime.utcnow()}
-- Status: Beta (Pending Verification)
-"""
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(skill_content)
+        # Save skill
+        file_path = self.skill_generator.save_skill(skill_content, self.skills_dir)
+        skill_name = os.path.basename(file_path)
         
         # Submit for verification
         self.verification_system.submit_for_verification(skill_name, "EvolutionEngine")
         
+        # Add to marketplace
+        self.skill_marketplace.add_skill(
+            skill_name=task_name,
+            skill_file=file_path,
+            category=category,
+            description="This skill was evolved from a successful experience."
+        )
+        
         print(f"[EvolutionEngine] New skill created: {skill_name}")
         print(f"[EvolutionEngine] Skill submitted for verification")
+        print(f"[EvolutionEngine] Skill added to marketplace")
         return skill_name
 
     async def evolve(self, task_name: str, conversation_history: List[OmniMessage]):
@@ -84,11 +92,24 @@ This skill was evolved from a successful experience.
         print(f"[EvolutionEngine] Evolving skill for task: {task_name}")
         
         # 1. Extract experience trace (Mocking the LLM reflection process)
-        trace = "\\n".join([f"{m.sender}: {m.content}" for m in conversation_history])
+        trace = "\n".join([f"{m.sender}: {m.content}" for m in conversation_history])
         experience_trace = f"Based on the history, the successful pattern was: {trace[:200]}..."
         
         # 2. Define success criteria
         success_criteria = "The user confirmed the result was correct."
         
-        # 3. Create the skill
-        return await self.create_skill(task_name, experience_trace, success_criteria)
+        # 3. Determine skill category based on task name
+        task_name_lower = task_name.lower()
+        if any(keyword in task_name_lower for keyword in ["research", "调研", "调查"]):
+            category = "research"
+        elif any(keyword in task_name_lower for keyword in ["write", "写", "文章", "报告"]):
+            category = "writing"
+        elif any(keyword in task_name_lower for keyword in ["analyze", "分析", "评估"]):
+            category = "analysis"
+        elif any(keyword in task_name_lower for keyword in ["plan", "规划", "计划"]):
+            category = "planning"
+        else:
+            category = "general_task"
+        
+        # 4. Create the skill
+        return await self.create_skill(task_name, experience_trace, success_criteria, category)

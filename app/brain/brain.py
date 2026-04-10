@@ -4,7 +4,6 @@ from app.memory.manager import OmniMemoryManager
 from app.evolution.engine import EvolutionEngine
 from app.core.llm import LLMClient
 from langgraph.graph import Graph
-from langgraph.execution import Runtime
 
 class ComplexityEvaluator:
     """
@@ -100,7 +99,6 @@ class LangGraphMultiAgent:
         self.evaluator = ComplexityEvaluator()
         self.task_type = self.evaluator.get_task_type(task_content)
         self.graph = self._build_graph()
-        self.runtime = Runtime(self.graph)
 
     def _build_graph(self) -> Graph:
         """Build the LangGraph workflow based on task type."""
@@ -244,7 +242,7 @@ class LangGraphMultiAgent:
         print(f"[LangGraph] Task type: {self.task_type}")
         
         # Run the graph
-        result = await self.runtime.run({"task": self.task_content, "task_type": self.task_type})
+        result = await self.graph.run({"task": self.task_content, "task_type": self.task_type})
         
         # Return the final result
         return result.get("final_result", "")

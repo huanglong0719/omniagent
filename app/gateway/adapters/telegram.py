@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from omniagent.app.gateway.adapters.base import ChannelAdapter
+from app.gateway.adapters.base import ChannelAdapter
 import asyncio
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
