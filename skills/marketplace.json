@@ -1,0 +1,64 @@
+{
+  "skills": [
+    {
+      "id": "skill_1",
+      "name": "市场调研",
+      "file": "omniagent/skills/skill_market_research.md",
+      "category": "research",
+      "description": "执行市场调研任务，收集和分析市场数据",
+      "created_at": "2026-04-10T05:15:13.378482",
+      "version": "1.0",
+      "downloads": 0,
+      "rating": 4.5
+    },
+    {
+      "id": "skill_2",
+      "name": "文章写作",
+      "file": "omniagent/skills/skill_article_writing.md",
+      "category": "writing",
+      "description": "撰写各类文章和报告",
+      "created_at": "2026-04-10T05:15:13.379482",
+      "version": "1.0",
+      "downloads": 0,
+      "rating": 0.0
+    },
+    {
+      "id": "skill_3",
+      "name": "数据分析",
+      "file": "omniagent/skills/skill_data_analysis.md",
+      "category": "analysis",
+      "description": "分析数据并生成报告",
+      "created_at": "2026-04-10T05:15:13.382482",
+      "version": "1.0",
+      "downloads": 0,
+      "rating": 0.0
+    },
+    {
+      "id": "skill_4",
+      "name": "项目规划",
+      "file": "omniagent/skills/skill_project_planning.md",
+      "category": "planning",
+      "description": "制定项目计划和时间表",
+      "created_at": "2026-04-10T05:15:13.383479",
+      "version": "1.0",
+      "downloads": 0,
+      "rating": 0.0
+    }
+  ],
+  "categories": [
+    "research",
+    "writing",
+    "analysis",
+    "planning"
+  ],
+  "ratings": {
+    "skill_1": [
+      {
+        "user_id": "user_1",
+        "rating": 4.5,
+        "comment": "非常好用的技能，帮助我完成了市场调研任务",
+        "timestamp": "2026-04-10T05:15:13.475051"
+      }
+    ]
+  }
+}

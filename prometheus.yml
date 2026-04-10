@@ -1,0 +1,39 @@
+# Prometheus 配置文件
+
+global:
+  scrape_interval: 15s  # 抓取间隔
+  evaluation_interval: 15s  # 评估间隔
+
+# 告警配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# 告警规则
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# 抓取配置
+scrape_configs:
+  # 抓取 Prometheus 自身的指标
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 抓取 OmniAgent 应用的指标
+  - job_name: 'omniagent'
+    static_configs:
+      - targets: ['omniagent:8000']
+
+  # 抓取 Qdrant 的指标
+  - job_name: 'qdrant'
+    static_configs:
+      - targets: ['qdrant:6333']
+
+  # 抓取 Docker 容器的指标
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['localhost:9323']
