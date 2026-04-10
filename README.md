@@ -246,13 +246,134 @@ omniagent/
 - Swagger UI: `http://localhost:8002/docs`
 - ReDoc: `http://localhost:8002/redoc`
 
+### 核心 API 端点
+
+#### 系统状态
+- `GET /api/system/status` - 获取系统健康状态和资源使用情况
+
+#### 技能管理
+- `GET /api/skills` - 获取所有技能
+- `POST /api/skills` - 创建新技能
+- `PUT /api/skills/{skill_id}` - 更新技能
+- `DELETE /api/skills/{skill_id}` - 删除技能
+- `POST /api/skills/{skill_id}/verify` - 验证技能
+
+#### 监控数据
+- `GET /api/monitoring/metrics` - 获取系统性能和使用统计
+- `GET /api/monitoring/logs` - 获取系统日志
+
+#### 用户管理
+- `POST /api/auth/register` - 注册新用户
+- `POST /api/auth/login` - 用户登录
+- `GET /api/users/me` - 获取当前用户信息
+- `PUT /api/users/me` - 更新用户信息
+
+### API 示例
+
+```bash
+# 获取系统状态
+curl http://localhost:8002/api/system/status
+
+# 获取技能列表
+curl http://localhost:8002/api/skills
+
+# 注册新用户
+curl -X POST http://localhost:8002/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "email": "test@example.com", "password": "password123"}'
+
+# 用户登录
+curl -X POST http://localhost:8002/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "password": "password123"}'
+```
+
 ## 贡献指南
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+### 1. 环境准备
+
+1. Fork 本仓库到您的 GitHub 账号
+2. 克隆 Fork 后的仓库到本地
+   ```bash
+   git clone https://github.com/your-username/omniagent.git
+   cd omniagent
+   ```
+3. 创建虚拟环境并安装依赖
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   venv\Scripts\activate  # Windows
+   pip install -r requirements.txt
+   ```
+4. 安装前端依赖
+   ```bash
+   cd ui
+   npm install
+   ```
+
+### 2. 分支管理
+
+- **master**：主分支，包含稳定的生产代码
+- **develop**：开发分支，包含最新的开发代码
+- **feature/***：特性分支，用于开发新功能
+- **bugfix/***：修复分支，用于修复 bug
+- **hotfix/***：紧急修复分支，用于生产环境的紧急修复
+
+### 3. 代码风格
+
+- **Python**：遵循 PEP 8 代码风格
+- **JavaScript**：遵循 ESLint 代码风格
+- **提交信息**：使用语义化提交信息，格式为 `type(scope): subject`
+  - `type`：feat（新功能）、fix（修复）、docs（文档）、style（风格）、refactor（重构）、test（测试）、chore（构建/依赖）
+  - `scope`：功能模块名称
+  - `subject`：简短的提交描述
+
+### 4. 开发流程
+
+1. 从 `develop` 分支创建特性分支
+   ```bash
+   git checkout develop
+   git pull
+   git checkout -b feature/your-feature
+   ```
+
+2. 开发新功能或修复 bug
+
+3. 运行测试确保代码质量
+   ```bash
+   python test_core_functions.py
+   python tests/test_performance.py
+   ```
+
+4. 提交更改
+   ```bash
+   git add .
+   git commit -m 'feat(模块名): 功能描述'
+   ```
+
+5. 推送到远程分支
+   ```bash
+   git push origin feature/your-feature
+   ```
+
+6. 打开 Pull Request 到 `develop` 分支
+
+### 5. 代码审查
+
+- 所有 Pull Request 都需要至少一名团队成员审查
+- 审查通过后，代码将被合并到 `develop` 分支
+- 定期从 `develop` 分支合并到 `master` 分支进行发布
+
+### 6. 发布流程
+
+1. 更新版本号和 CHANGELOG
+2. 从 `develop` 分支合并到 `master` 分支
+3. 标签化发布版本
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+4. 构建和部署
 
 ## 许可证
 
